@@ -206,8 +206,10 @@ class Developer:
             f"The path {path_str} is not an absolute path, did you possibly mean {suggestion}?"
         )
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> CallToolResult:
-        tool = self._registry.get(name)
+    async def call_tool(
+        self, name: str, arguments: Dict[str, Any], *, tool: Optional[Tool] = None
+    ) -> CallToolResult:
+        tool = tool or self._registry.get(name)
         async def _execute(span: Any) -> CallToolResult:
             try:
                 result = await tool.call(arguments)

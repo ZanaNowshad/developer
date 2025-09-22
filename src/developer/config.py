@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 try:  # pragma: no cover - executed when optional dependency exists
     from pydantic import BaseModel, Field
@@ -20,6 +20,25 @@ class SecuritySettings(BaseModel):
     oauth_client_id: str = Field(default="developer-local", description="OAuth client identifier")
     oauth_client_secret: str = Field(default="developer-secret", description="Client secret")
     token_ttl_seconds: int = Field(default=3_600, description="Token lifetime")
+    default_roles: List[str] = Field(
+        default_factory=lambda: ["developer"],
+        description="Roles granted to tokens when none are specified",
+    )
+    role_permissions: Dict[str, List[str]] = Field(
+        default_factory=lambda: {
+            "developer": ["tag:*"],
+            "observer": ["tag:core"],
+            "admin": ["*"],
+        },
+        description=(
+            "Mapping of role names to permission strings supporting '*' for all tools, "
+            "'tool:<name>' for specific tools, and 'tag:<tag>' for tagged tools."
+        ),
+    )
+    plugin_admin_roles: List[str] = Field(
+        default_factory=lambda: ["admin"],
+        description="Roles permitted to reload or manage plugins",
+    )
 
 
 class TelemetrySettings(BaseModel):

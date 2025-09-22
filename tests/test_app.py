@@ -91,3 +91,48 @@ def test_app_websocket_broadcast() -> None:
             await app.trigger_event("shutdown")
 
     _run(scenario())
+
+
+def test_role_based_access_control() -> None:
+    settings = AppSettings()
+    developer = Developer(settings=settings)
+    app = build_app(settings=settings, developer=developer)
+
+    async def scenario() -> None:
+        await app.trigger_event("startup")
+        try:
+            security = app.state.security  # type: ignore[attr-defined]
+            observer_token = await security.issue_token(roles=["observer"])
+
+            tools_response = await app.dispatch("GET", "/tools", token=observer_token)
+            tool_names = {tool["name"] for tool in tools_response["tools"]}
+            assert "text_editor" in tool_names
+            assert "code_analysis" not in tool_names
+
+            with pytest.raises(Exception) as exc_info:
+                await app.dispatch(
+                    "POST",
+                    "/analysis/ast",
+                    token=observer_token,
+                    source="def sample():\n    return 1\n",
+                    mode="signatures",
+                )
+            assert (
+                getattr(exc_info.value, "status_code", None)
+                == fastapi_stub.status.HTTP_403_FORBIDDEN.value
+            )
+
+            with pytest.raises(Exception) as exc_info:
+                await app.dispatch("POST", "/plugins/reload", token=observer_token)
+            assert (
+                getattr(exc_info.value, "status_code", None)
+                == fastapi_stub.status.HTTP_403_FORBIDDEN.value
+            )
+
+            admin_token = await security.issue_token(roles=["admin"])
+            reload_response = await app.dispatch("POST", "/plugins/reload", token=admin_token)
+            assert reload_response["status"] == "reloaded"
+        finally:
+            await app.trigger_event("shutdown")
+
+    _run(scenario())

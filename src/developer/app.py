@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from .config import AppSettings
+from .errors import ToolError
 from .security import SecurityManager
 from .server import Developer
 
@@ -22,6 +23,7 @@ def build_app(settings: Optional[AppSettings] = None, developer: Optional[Develo
     security = SecurityManager(settings)
 
     app = FastAPI(title="Developer Platform API", version="1.1.0")
+    app.state.security = security
 
     @app.on_event("startup")
     async def _startup() -> None:
@@ -38,7 +40,7 @@ def build_app(settings: Optional[AppSettings] = None, developer: Optional[Develo
             or client_secret != settings.security.oauth_client_secret
         ):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED.value, "Invalid client credentials")
-        token = await security.issue_token(client_id)
+        token = await security.issue_token(username=client_id)
         return {
             "access_token": token,
             "token_type": "bearer",
@@ -58,14 +60,19 @@ def build_app(settings: Optional[AppSettings] = None, developer: Optional[Develo
 
     @app.get("/tools")
     async def list_tools(token: Optional[str] = None):
-        await current_user(token)
-        tools = await developer.list_tools()
-        return {"tools": list(tools)}
+        user = await current_user(token)
+        tools = list(await developer.list_tools())
+        return {"tools": security.filter_tools(user, tools)}
 
     @app.post("/tools/{name}/invoke")
     async def invoke_tool(name: str, arguments: Dict[str, Any], token: Optional[str] = None):
-        await current_user(token)
-        result = await developer.call_tool(name, arguments)
+        user = await current_user(token)
+        try:
+            tool_obj = developer.registry.get(name)
+        except ToolError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND.value, exc.message) from exc
+        security.authorize_tool(user, tool_obj)
+        result = await developer.call_tool(name, arguments, tool=tool_obj)
         return result.to_dict()
 
     @app.get("/plugins")
@@ -75,7 +82,8 @@ def build_app(settings: Optional[AppSettings] = None, developer: Optional[Develo
 
     @app.post("/plugins/reload")
     async def reload_plugins(token: Optional[str] = None) -> Dict[str, Any]:
-        await current_user(token)
+        user = await current_user(token)
+        security.require_plugin_admin(user)
         await developer.reload_plugins()
         return {"status": "reloaded"}
 
@@ -92,8 +100,15 @@ def build_app(settings: Optional[AppSettings] = None, developer: Optional[Develo
 
     @app.post("/analysis/ast")
     async def ast_analysis(source: str, mode: str = "signatures", token: Optional[str] = None):
-        await current_user(token)
-        result = await developer.call_tool("code_analysis", {"source": source, "mode": mode})
+        user = await current_user(token)
+        try:
+            tool_obj = developer.registry.get("code_analysis")
+        except ToolError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND.value, exc.message) from exc
+        security.authorize_tool(user, tool_obj)
+        result = await developer.call_tool(
+            "code_analysis", {"source": source, "mode": mode}, tool=tool_obj
+        )
         return result.to_dict()
 
     @app.websocket("/ws/events")

@@ -18,8 +18,8 @@ packaging, FastAPI, async/await throughout, and pluggable developer tooling.
   durable audit trails.
 - **Caching layer** with Redis integration or in-memory store, featuring configurable invalidation
   strategies.
-- **Security and identity** powered by an OAuth2-style flow and token validation helpers suitable
-  for headless automation.
+- **Security and identity** powered by an OAuth2-style flow with configurable role-based access
+  control, suitable for headless automation.
 - **Observability ready** using OpenTelemetry compatible tracer helpers for span instrumentation.
 - **Type safety and linting** configured via Black, isort, flake8, and mypy with strict settings.
 - **Documentation and testing** supported by Sphinx and property-based tests using Hypothesis.
@@ -100,8 +100,21 @@ from developer.security import SecurityManager
 
 settings = AppSettings()
 security = SecurityManager(settings)
-token = asyncio.run(security.issue_token())
+
+# Issue a standard developer token
+developer_token = asyncio.run(security.issue_token())
+
+# Tokens can request narrower privileges by selecting roles
+observer_token = asyncio.run(security.issue_token(roles=["observer"]))
 ```
+
+Roles are configured via `SecuritySettings`:
+
+- `default_roles` determine which roles are granted when none are specified (defaults to
+  `developer`).
+- `role_permissions` maps role names to tool permissions using `*`, `tool:<name>`, or `tag:<tag>`
+  selectors.
+- `plugin_admin_roles` identifies which roles may reload or manage plugins (defaults to `admin`).
 
 Pass the resulting token as the `token` argument to authenticated API calls when using the
 built-in FastAPI stub or via an `Authorization: Bearer` header when running with the real
