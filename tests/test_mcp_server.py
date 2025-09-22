@@ -58,3 +58,37 @@ def test_mcp_server_unknown_method() -> None:
         assert error["error"]["code"] == -32601
 
     asyncio.run(scenario())
+
+
+def test_mcp_server_missing_tool_name() -> None:
+    developer = Developer()
+    server = McpServer(developer)
+
+    async def scenario() -> None:
+        await developer.startup()
+        try:
+            response = await server._handle_message(
+                {"id": 5, "method": "tools/call", "params": {}}
+            )
+            assert response["error"]["code"] == -32602
+        finally:
+            await developer.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_mcp_server_shutdown_request() -> None:
+    developer = Developer()
+    server = McpServer(developer)
+
+    async def scenario() -> None:
+        await developer.startup()
+        try:
+            assert server._running is True
+            response = await server._handle_message({"id": 6, "method": "shutdown"})
+            assert response["result"]["ok"] is True
+            assert server._running is False
+        finally:
+            await developer.shutdown()
+
+    asyncio.run(scenario())

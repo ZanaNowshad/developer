@@ -14,19 +14,40 @@ except ModuleNotFoundError:  # pragma: no cover - fallback path
 
 
 class TaskQueue:
-    def __init__(self, settings: AppSettings) -> None:
+    """Simple wrapper that prefers Celery but can operate entirely in-process."""
+
+    def __init__(
+        self,
+        settings: AppSettings,
+        *,
+        celery_app: Optional["Celery"] = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+    ) -> None:
         self._settings = settings
-        self._celery: Optional[Celery] = None
+        self._loop = self._resolve_loop(loop)
+        self._celery: Optional[Celery] = celery_app or self._initialise_celery()
+
+    def _resolve_loop(
+        self, loop: Optional[asyncio.AbstractEventLoop]
+    ) -> asyncio.AbstractEventLoop:
+        if loop is not None:
+            return loop
         try:
-            self._loop = asyncio.get_running_loop()
+            return asyncio.get_running_loop()
         except RuntimeError:
-            self._loop = asyncio.new_event_loop()
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            return new_loop
+
+    def _initialise_celery(self) -> Optional[Celery]:
         try:
-            self._celery = Celery(
-                "developer", broker=settings.celery_broker_url, backend=settings.celery_backend_url
+            return Celery(
+                "developer",
+                broker=self._settings.celery_broker_url,
+                backend=self._settings.celery_backend_url,
             )
         except Exception:  # pragma: no cover - celery unavailable
-            self._celery = None
+            return None
 
     def task(self, name: Optional[str] = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
