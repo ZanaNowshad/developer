@@ -1,0 +1,59 @@
+[tool.poetry]
+name = "developer"
+version = "1.1.0"
+description = "Modernized Developer MCP server"
+readme = "README.md"
+authors = ["Alex Rozgo <alex.rozgo@gmail.com>"]
+license = "MIT"
+keywords = ["developer", "tools", "mcp"]
+packages = [
+    { include = "developer", from = "src" },
+    { include = "rig", from = "src" },
+]
+
+[tool.poetry.scripts]
+developer = "developer.cli:main"
+rig = "rig.cli:main"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.110.0"
+uvicorn = "^0.27.0"
+pydantic = "^2.6.0"
+pydantic-settings = "^2.2.1"
+sqlalchemy = "^2.0.29"
+redis = "^5.0.1"
+celery = "^5.3.0"
+opentelemetry-api = "^1.24.0"
+opentelemetry-sdk = "^1.24.0"
+pathspec = "^0.12.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+pytest-asyncio = "^0.23.0"
+hypothesis = "^6.102.0"
+black = "^24.3.0"
+isort = "^5.13.0"
+flake8 = "^7.0.0"
+mypy = "^1.10.0"
+sphinx = "^7.3.0"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
