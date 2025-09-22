@@ -1,314 +1,150 @@
-# Developer MCP Server
+# Developer MCP Platform (Python)
 
-A general purpose Model Context Protocol (MCP) server that provides comprehensive developer tools for file editing, shell command execution, and screen capture capabilities. Built using the [rmcp](https://github.com/modelcontextprotocol/rmcp) crate.
+This repository contains an end-to-end Python implementation of the Developer Model Context
+Protocol (MCP) server and supporting infrastructure. The original Rust codebase has been
+reimagined using modern Python 3.11 features and ecosystem best practices including Poetry-based
+packaging, FastAPI, async/await throughout, and pluggable developer tooling.
 
-## 🚀 Features
+## ✨ Highlights
 
-### 📝 Text Editor
-- **View files** with language detection for markdown formatting
-- **Write/create files** with automatic directory creation
-- **String replacement** with precise matching
-- **Undo functionality** with edit history
-- **File size protection** (400KB limit for text files)
+- **FastAPI service layer** with REST and WebSocket endpoints for real-time tool telemetry.
+- **Async-first core** preserving the behaviour of the historical developer tools: text editing,
+  shell execution, workflows, image utilities, and more.
+- **Plugin architecture** with sandboxed module loading so custom tools can be registered without
+  compromising stability.
+- **Distributed task execution** via a Celery-compatible task queue, gracefully degrading to an
+  in-process executor when brokers are unavailable.
+- **Database persistence** backed by SQLAlchemy 2.0 async engines (with an in-memory fallback) for
+  durable audit trails.
+- **Caching layer** with Redis integration or in-memory store, featuring configurable invalidation
+  strategies.
+- **Security and identity** powered by an OAuth2-style flow and token validation helpers suitable
+  for headless automation.
+- **Observability ready** using OpenTelemetry compatible tracer helpers for span instrumentation.
+- **Type safety and linting** configured via Black, isort, flake8, and mypy with strict settings.
+- **Documentation and testing** supported by Sphinx and property-based tests using Hypothesis.
 
-### 🖥️ Shell Integration
-- **Cross-platform command execution** (PowerShell on Windows, bash/zsh on Unix)
-- **Combined stdout/stderr output** as it appears in terminal
-- **Output size protection** (400KB limit)
-- **Platform-specific optimizations**
+## 📦 Project Layout
 
-### 📸 Screen Capture
-- **Full display screenshots** with monitor selection
-- **Window-specific capture** by title
-- **Automatic image optimization** (768px max width)
-- **Base64 encoded PNG output**
+```
+src/
+  developer/
+    app.py              # FastAPI wiring
+    ast_tools.py        # AST-based analysis utilities
+    cache.py            # Redis/in-memory caching backends
+    cli.py              # Command line entry points
+    config.py           # Pydantic-powered settings
+    database.py         # SQLAlchemy async integration with fallback
+    mcp_server.py       # JSON-RPC stdio server for MCP
+    observability.py    # OpenTelemetry tracer helpers
+    plugins.py          # Dynamic plugin loader
+    realtime.py         # WebSocket broadcast hub
+    schemas.py          # Pydantic parameter models
+    security.py         # OAuth2 helpers
+    server.py           # Core Developer tool orchestration
+    tasks.py            # Celery-compatible task queue wrapper
+    ... (existing tool implementations)
+  rig/
+    cli.py              # Interactive CLI mirroring the classic rig example
+```
 
-### 🖼️ Image Processing
-- **Image file processing** from disk
-- **Automatic resizing** while maintaining aspect ratio
-- **Format conversion** to PNG
-- **macOS screenshot filename handling**
+## 🛠 Prerequisites
 
-### 🔄 Workflow Management
-- **Multi-step problem solving** with sequential progression
-- **Branching workflows** for alternative solution paths
-- **Step revision** capability to update previous steps
-- **Context preservation** across complex reasoning processes
+- Python **3.11** or newer
+- [Poetry](https://python-poetry.org/) for dependency management
 
-### 🔒 Security Features
-- **Gitignore integration** - respects `.gitignore` patterns for file access control
-- **Path validation** - requires absolute paths to prevent directory traversal
-- **File size limits** - prevents memory exhaustion attacks
-- **Access pattern filtering** - blocks access to sensitive files
+The repository vendors lightweight fallbacks for third-party libraries (FastAPI, Pydantic,
+Celery, Redis, OpenTelemetry, Hypothesis) so the codebase remains runnable in constrained
+sandbox environments. When the real packages are installed, they will be preferred automatically.
 
-## 📋 Requirements
+## 🚀 Getting Started
 
-- **Rust** 1.70+ (for building from source)
-- **Claude Desktop** or compatible MCP client
-- **Operating System**: macOS, Linux, or Windows
-
-## 🛠️ Installation
-
-### Option 1: Build from Source (Recommended)
-
-1. **Clone the repository:**
-   ```bash
-   git clone git@github.com:VertexStudio/developer.git
-   cd developer
-   ```
-
-2. **Build the project:**
-   ```bash
-   cargo build --release
-   ```
-
-3. **The binary will be available at:**
-   ```
-   target/release/developer
-   ```
-
-### Option 2: Development Build
-
-For development/testing purposes:
 ```bash
-cargo build
-# Binary at: target/debug/developer
+# Install dependencies
+poetry install
+
+# Activate the virtual environment
+eval "$(poetry env info --path 2>/dev/null && echo 'export PYTHONPATH=src')"
+
+# Run the MCP stdio server
+developer
+
+# View available tools in JSON schema form
+developer toolbox
+
+# Start the FastAPI layer (requires uvicorn to be installed)
+developer api --host 0.0.0.0 --port 8000
+
+# Explore interactively using the rig helper
+rig chat
 ```
 
 ## ⚙️ Configuration
 
-### Claude Desktop Setup
+Settings are loaded via environment variables prefixed with `DEVELOPER_` and map directly to
+`AppSettings` fields:
 
-1. **Open Claude Desktop configuration file:**
+- `DEVELOPER_TEXT_EDITOR_MAX_HISTORY` limits how many undo operations are retained per file.
+- `DEVELOPER_TOOLS_CACHE_TTL_SECONDS` controls how long tool metadata is cached before refresh.
+- `DEVELOPER_TELEMETRY_EXPORTER_ENDPOINT` enables OTLP trace export when the optional
+  OpenTelemetry SDK is installed.
 
-   **macOS/Linux:**
-   ```bash
-   code ~/Library/Application\ Support/Claude/claude_desktop_config.json
-   ```
+## 🔐 Authentication
 
-   **Windows:**
-   ```bash
-   code %APPDATA%\Claude\claude_desktop_config.json
-   ```
+The FastAPI layer exposes an OAuth2-style token endpoint. By default the credentials are defined
+via `AppSettings.security`. Example token request:
 
-2. **Add the developer server configuration:**
+```python
+from developer import AppSettings, build_app
+from developer.security import SecurityManager
 
-   ```json
-   {
-     "mcpServers": {
-       "developer": {
-         "command": "/path/to/your/developer/target/release/developer",
-         "args": []
-       }
-     }
-   }
-   ```
-
-   **Example configurations:**
-
-   **Development build:**
-   ```json
-   {
-     "mcpServers": {
-       "developer": {
-         "command": "/Users/rozgo/vertex/developer/target/debug/developer",
-         "args": []
-       }
-     }
-   }
-   ```
-
-   **Production build:**
-   ```json
-   {
-     "mcpServers": {
-       "developer": {
-         "command": "/Users/rozgo/vertex/developer/target/release/developer",
-         "args": []
-       }
-     }
-   }
-   ```
-
-3. **Restart Claude Desktop** to load the new configuration.
-
-### File Access Control (Optional)
-
-Create a `.gitignore` file in your working directory to control which files the server can access:
-
-```gitignore
-# Sensitive files
-.env
-.env.*
-secrets.*
-private/
-*.key
-*.pem
-
-# Build artifacts
-target/
-node_modules/
-dist/
+settings = AppSettings()
+security = SecurityManager(settings)
+token = asyncio.run(security.issue_token())
 ```
 
-The server will automatically respect these patterns and block access to matching files.
+Pass the resulting token as the `token` argument to authenticated API calls when using the
+built-in FastAPI stub or via an `Authorization: Bearer` header when running with the real
+FastAPI/uvicorn stack.
 
-## 🎯 Usage Examples
+## 🧩 Plugin Architecture
 
-Once configured, you can use these tools directly in Claude Desktop:
+Enabled plugins are configured through `AppSettings.enabled_plugins`. Each plugin module must
+expose a `register(registry)` function and can register new tools using the sandboxed
+`registry.register(Tool(...))` API. Plugins can be inspected or reloaded at runtime via the
+FastAPI endpoints (`GET /plugins`, `POST /plugins/reload`) or through the CLI
+(`developer plugins`).
 
-### Text Editing
-```
-"Can you view the contents of /path/to/my/file.rs?"
+## 📚 Documentation
 
-"Please create a new file at /path/to/hello.py with a simple hello world script"
+Sphinx configuration lives in `docs/` (generated during subsequent iterations). Build the API
+reference documentation with:
 
-"Replace the line 'old_function()' with 'new_function()' in /path/to/main.rs"
-
-"Undo the last edit to /path/to/main.rs"
-```
-
-### Shell Commands
-```
-"Run 'ls -la' to show me the current directory contents"
-
-"Execute 'cargo test' to run the test suite"
-
-"Run 'git status' to check the repository status"
-```
-
-### Screen Capture
-```
-"Take a screenshot of my main display"
-
-"Capture a screenshot of the window titled 'VS Code'"
-
-"Show me what windows are available for capture"
-```
-
-### Image Processing
-```
-"Process the image at /path/to/screenshot.png and show it to me"
-
-"Load and display the image from /Users/me/Desktop/diagram.jpg"
-```
-
-### Workflow Management
-```
-"Start a workflow to implement a new feature with 5 steps"
-
-"Create a branch from step 3 to explore an alternative approach"
-
-"Revise step 2 to use a different algorithm"
-```
-
-## 🏗️ Architecture
-
-```
-Developer MCP Server
-├── Text Editor     → File viewing, editing, string replacement, undo
-├── Shell           → Cross-platform command execution  
-├── Screen Capture  → Display and window screenshots
-├── Image Processor → File-based image processing
-├── Workflow        → Multi-step problem solving with branching
-└── Security Layer  → Gitignore integration, path validation
-```
-
-## 🔧 Tool Reference
-
-### text_editor
-- **Commands:** `view`, `write`, `str_replace`, `undo_edit`
-- **Parameters:** `path` (required), `file_text`, `old_str`, `new_str`
-- **Limits:** 400KB file size, absolute paths only
-
-### shell  
-- **Parameters:** `command` (required)
-- **Features:** Platform detection, output redirection, size limits
-- **Limits:** 400KB output size
-
-### screen_capture
-- **Parameters:** `display` (optional), `window_title` (optional)
-- **Output:** Base64 PNG image, 768px max width
-
-### list_windows
-- **Parameters:** None
-- **Output:** List of capturable window titles
-
-### image_processor
-- **Parameters:** `path` (required)
-- **Features:** Auto-resize, format conversion, macOS compatibility
-- **Limits:** 10MB file size
-
-### workflow
-- **Parameters:** `step_description`, `step_number`, `total_steps`, `next_step_needed` (required), `is_step_revision`, `revises_step`, `branch_from_step`, `branch_id`, `needs_more_steps` (optional)
-- **Features:** Sequential progression, branching, step revision
-- **Output:** JSON workflow status
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**"Tool not found" errors:**
-- Ensure the binary path in your configuration is correct
-- Verify the binary exists and is executable
-- Check Claude Desktop logs for detailed error messages
-
-**"File access denied" errors:**
-- Check if the file is blocked by `.gitignore` patterns
-- Ensure you're using absolute paths (not relative paths)
-- Verify file permissions
-
-**"Command failed" errors:**
-- Ensure the command exists and is in your system PATH
-- Check if the command requires special permissions
-- Verify the command syntax for your operating system
-
-### Debug Mode
-
-Build with debug info for troubleshooting:
 ```bash
-cargo build
-# Use target/debug/developer in your configuration
+poetry run sphinx-build docs docs/_build
 ```
 
-### MCP Inspector
+## 🧪 Testing
 
-Use the official MCP inspector to debug and test tools:
+Property-based tests and asynchronous unit tests are executed with pytest and Hypothesis:
+
 ```bash
-npx @modelcontextprotocol/inspector target/debug/developer
+poetry run pytest
 ```
 
-This will open a web interface where you can:
-- Inspect available tools and their schemas
-- Test tool calls interactively
-- Debug server responses
-- Validate MCP protocol compliance
+The repository includes stub implementations of Hypothesis strategies so tests can execute in
+restricted CI sandboxes without external network access.
 
-### Tools Schema Export
+## 🧭 Observability & Persistence
 
-Export the tools JSON schema for debugging or integration:
-```bash
-# Save tools schema to file
-cargo run toolbox > tools.json
+- **Database**: SQLAlchemy async engine targets the URL specified in `AppSettings.database_url`.
+  When the driver is unavailable the runtime transparently falls back to an in-memory ledger.
+- **Caching**: `AppSettings.redis_url` controls the caching backend. Use `memory://` for the default
+  in-process cache or a Redis connection string for production deployments.
+- **Tracing**: `developer.observability.setup_tracer` configures OpenTelemetry automatically. Set
+  `telemetry.exporter_endpoint` (or `DEVELOPER_TELEMETRY_EXPORTER_ENDPOINT`) to publish spans to an
+  OTLP endpoint when the optional SDK and exporter are available.
 
-# Pretty print tools schema
-cargo run toolbox | jq .
-```
+## 📄 License
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass: `cargo test`
-5. Submit a pull request
-
-## 📝 License
-
-[MIT](LICENSE)
-
-## 🔗 Related Projects
-
-- [Model Context Protocol](https://modelcontextprotocol.io/) - The protocol specification
-- [Claude Desktop](https://claude.ai/download) - Official Claude desktop application
-- [MCP Servers](https://github.com/modelcontextprotocol/servers) - Official MCP server implementations
+MIT License — see [`LICENSE`](LICENSE) for details.
